@@ -112,7 +112,7 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
              },
              playSong : function(song) {
                // if there is current track, stop it from playing:
-               $log.info('angular-player: play song: ' + song.id + ' - ' + song.getSongDescription());
+               $log.info('angular-player: play song: ' + song.shared.id + ' - ' + song.shared.getSongDescription());
                if (!_.isUndefined(this.getCurrentTrack()) && this.getCurrentTrack() !== song) {
                  $log.info('angular-player: stoping current track for playing new one');
                  this.stop();
@@ -120,15 +120,16 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                //play it
                // TODO: Let it use play method
                bufferingNextSongAlreadyCalled = false;
-               this.setCurrentTrack(song);
-               soundManager.play(song.id);
-               $rootScope.$broadcast('track:id', song.id);
+               this.setCurrentSong(song);
+               this.setCurrentTrack(song.shared); // <- only for clarity
+               soundManager.play(this.getCurrentTrack().id);
+               $rootScope.$broadcast('track:id', this.getCurrentTrack().id);
 
                //set as playing
                isPlaying = true;
                $rootScope.$broadcast('music:isPlaying', isPlaying);
 
-               return song.id;
+               return this.getCurrentTrack().id;
              },
 
              //_isPushingNextSongToQueue : false,
@@ -171,16 +172,16 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                    this.pushNextSongToQueue(function(nextTrack) {
                      var queueEntry = _player.queue.dequeue();
                      if (!queueEntry.buffered) queueEntry.buffer();
-                     if (queueEntry !== null) /* setTimeout(function() { */_player.playSong(queueEntry.song.shared); // }, 0);
+                     if (queueEntry !== null) /* setTimeout(function() { */_player.playSong(queueEntry.song); // }, 0);
                    });
                  } else {
                    $log.info('angular-player: Play: getting song from queue...');
                    var queueEntry = _player.queue.dequeue();
-                   if(queueEntry !== null) _player.playSong(queueEntry.song.shared);
+                   if(queueEntry !== null) _player.playSong(queueEntry.song);
                  }
                } else {
-                 $log.info('angular-player: Play: just play current Track');
-                 _player.playSong(this.getCurrentTrack());
+                 $log.info('angular-player: Play: just play current Song');
+                 _player.playSong(this.getCurrentSong());
                }
              },
              pause: function () {
@@ -227,12 +228,12 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                  this.pushNextSongToQueue(function(nextTrack) {
                    var queueEntry = _player.queue.dequeue();
                    queueEntry.buffer();
-                   if (queueEntry !== null) _player.playSong(queueEntry.song.shared);
+                   if (queueEntry !== null) _player.playSong(queueEntry.song);
                  });
                } else {
                  $log.info('angular-player: Next track: ...playing song from queue');
                  var queueEntry = _player.queue.dequeue();
-                 if (queueEntry !== null) _player.playSong(queueEntry.song.shared);
+                 if (queueEntry !== null) _player.playSong(queueEntry.song);
                }
                // Queue empty? Add new song then:
                // DK: TEMP Queue only when old song is fully loaded.
