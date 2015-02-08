@@ -5937,7 +5937,8 @@ function SoundManager(smURL, smID) {
         if (is_iDevice) {
           sm2.ignoreFlash = true;
         }
-        useGlobalHTML5Audio = true;
+        // DK: Testing...
+        useGlobalHTML5Audio = false;
       }
 
     }
