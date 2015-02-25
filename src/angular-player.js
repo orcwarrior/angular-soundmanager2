@@ -13,7 +13,7 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
         };
     })
 
-    .factory('angularPlayer', [ '$rootScope', '$log', 'playlist', function ($rootScope, $log) {
+    .factory('angularPlayer', [ '$rootScope', '$log', 'playlist', '$document', function ($rootScope, $log, playlist, $document) {
 
 
         var repeat = false,
@@ -69,45 +69,10 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
              },
              playlist : _playlist,
              queue : _queue,
+             tracksHistory :
              addToPlaylist: function (entry) {
                _playlist.addEntry(entry)
                //broadcast playlist
-               $rootScope.$broadcast('player:playlist', _playlist);
-             },
-             addTrack: function (track) {
-               //check if mime is playable first: -dk
-               if (!soundManager.canPlayMIME(track.type)) {
-                 //check if url is playable
-                 if (soundManager.canPlayURL(track.url) !== true) {
-                   console.log('invalid song url');
-                   return null;
-                 }
-               }
-               soundManager.createSound({
-                                          id: song.shared.id,
-                                          url: song.shared.url
-                                        });
-
-               // DK: Sounds played by this method should be from playlist already
-               //add to playlist
-               //this.addToPlaylist(song);
-               // }
-
-               return track.id;
-             },
-             removeSong: function (song, index) {
-               //if this song is playing stop it
-               if (song === currentTrack) {
-                 this.stop();
-               }
-
-               //unload from soundManager
-               soundManager.destroySound(song);
-
-               //remove from playlist
-               _playlist.splice(index, 1);
-
-               //once all done then broadcast
                $rootScope.$broadcast('player:playlist', _playlist);
              },
              playSong : function(song) {
@@ -128,6 +93,9 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                //set as playing
                isPlaying = true;
                $rootScope.$broadcast('music:isPlaying', isPlaying);
+
+               // TODO: Refactor - set tab title to song name:
+               window.document.title = song.shared.getSongDescription();
 
                return this.getCurrentTrack().id;
              },
@@ -213,11 +181,6 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                else this.play();
                this.isPlaying = !this.isPlaying;
              },
-
-             playTrack: function (trackId) {
-               $log.info('angular-player: playTrack: '+trackId);
-               this.initPlayTrack(trackId);
-             },
              nextTrack: function () {
                $log.info('angular-player: Next track...');
                var _player = this;
@@ -248,15 +211,6 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
              },
              prevTrack: function () {
                $log.warn('angular-player: Previous Track, need reimplementation!!!');
-               // var currentTrackKey = this.getIndexByValue(soundManager.soundIDs, this.getCurrentTrack());
-               var prevTrackKey = +currentTrackKey - 1;
-               var prevTrack = soundManager.soundIDs[prevTrackKey];
-
-               if (typeof prevTrack !== 'undefined') {
-                 this.playTrack(prevTrack);
-               } else {
-                 console.log('no prev track found!');
-               }
              },
              mute: function () {
                if (soundManager.muted === true) {
@@ -294,8 +248,6 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                    changeVolume(volume);
                  }
                }
-             },
-             clearPlaylist: function (callback) {
              },
              resetProgress: function () {
                trackProgress = 0;
