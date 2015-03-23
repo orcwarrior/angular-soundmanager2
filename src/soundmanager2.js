@@ -3076,6 +3076,9 @@ function SoundManager(smURL, smID) {
       if (s._iO.onload) {
         wrapCallback(s, function() {
           s._iO.onload.apply(s, [loadOK]);
+          if (!loadOK) {
+            s._iO.onerror.apply(s, [s._a.error]);
+          }
         });
       }
 

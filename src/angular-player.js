@@ -13,119 +13,19 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
         };
     })
 
-    .factory('angularPlayer', [ '$rootScope', '$log', 'playlist', '$document', function ($rootScope, $log, playlist, $document) {
+    .factory('angularPlayer', function ($rootScope, $log, playlist) {
 
 
-        var repeat = false,
-            autoPlay = true,
-            isPlaying = false,
+        var isPlaying = false,
             volume = 90,
             bufferingNextSongAlreadyCalled = false,
-            trackProgress = 0;/*,
-            playlist = playlist;*/
+            trackProgress = 0;
                var injector = angular.injector(['musicBucketEngine']);
-               var _playlist = new injector.get('playlist').constructor();
-               var _queue = new injector.get('queue').constructor();
-               var SMSoundConverter = new injector.get('SMSoundConverter');
+               var _playlist;
                var currentTrack = undefined;
-               var currentSong = undefined;
 
            var angularPlayerInstance = {
-             /* Current song: song obj */
-             setCurrentSong: function (song) {
-               currentSong = song;
-               currentTrack = song.shared;
-             },
-             getCurrentSong: function () {
-               return currentSong;
-             },
-             /* Current track: song.shared */
-             setCurrentTrack: function (track) {
-               // TODO: Should it stay here?
-               currentTrack = track;
-             },
-             getCurrentTrack: function () {
-               return currentTrack;
-             },
-             setPlaylist: function (playlist) {
-               $log.info('angular-player: set playlist...');
-               $log.info(playlist);
-               this.playlist = playlist;
-               _playlist = playlist;
 
-               // Pre-buffer first song:
-               setTimeout(function() {
-                 angularPlayerInstance.pushNextSongToQueue(function (song) {
-                   _queue.bufferNext();
-                 });
-               }, 25);
-             },
-             getPlaylist: function (key) {
-               if (typeof key === 'undefined') {
-                 return _playlist;
-               } else {
-                 return _playlist[key];
-               }
-             },
-             playlist : _playlist,
-             queue : _queue,
-             tracksHistory :
-             addToPlaylist: function (entry) {
-               _playlist.addEntry(entry)
-               //broadcast playlist
-               $rootScope.$broadcast('player:playlist', _playlist);
-             },
-             playSong : function(song) {
-               // if there is current track, stop it from playing:
-               $log.info('angular-player: play song: ' + song.shared.id + ' - ' + song.shared.getSongDescription());
-               if (!_.isUndefined(this.getCurrentTrack()) && this.getCurrentTrack() !== song) {
-                 $log.info('angular-player: stoping current track for playing new one');
-                 this.stop();
-               }
-               //play it
-               // TODO: Let it use play method
-               bufferingNextSongAlreadyCalled = false;
-               this.setCurrentSong(song);
-               this.setCurrentTrack(song.shared); // <- only for clarity
-               soundManager.play(this.getCurrentTrack().id);
-               $rootScope.$broadcast('track:id', this.getCurrentTrack().id);
-
-               //set as playing
-               isPlaying = true;
-               $rootScope.$broadcast('music:isPlaying', isPlaying);
-
-               // TODO: Refactor - set tab title to song name:
-               window.document.title = song.shared.getSongDescription();
-
-               return this.getCurrentTrack().id;
-             },
-
-             //_isPushingNextSongToQueue : false,
-             pushNextSongToQueue : function(onLoadCallback) {
-               $log.info('angular-player: pushing new song to queue...');
-               // if (this._isPushingNextSongToQueue) {
-               //   $log.info('angular-player: ..some song already is being pushed to queue!.');
-               //   return;
-               // }
-               // this._isPushingNextSongToQueue = true;
-               var _player = this;
-               _playlist.getNext()
-                 // TODO: Cannot then of undefinied ??? (connection error, to check)
-                 .then(function(nextTrack) {
-                         $log.info('angular-player: Queue: new song in queue!');
-                         $log.info(nextTrack);
-                         var queueEntry;
-                         _player.queue.enqueue(nextTrack);
-                         onLoadCallback(nextTrack);
-                         // _player._isPushingNextSongToQueue = false;
-                       })
-                 .catch(function(response) {
-                          $log.warn('angular-player: ..Queueing error!');
-                          $log.warn(response);
-                          // _player._isPushingNextSongToQueue = false;
-                          _player.nextTrack(); // try to get next song
-                        });
-             },
              play: function () {
                $log.info('angular-player: Play called!.');
                var _player = this;
@@ -139,7 +39,7 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                    $log.info('angular-player: Play: there is no song in Queue, pushing some...');
                    this.pushNextSongToQueue(function(nextTrack) {
                      var queueEntry = _player.queue.dequeue();
-                     if (!queueEntry.buffered) queueEntry.buffer();
+                     if (!queueEntry.song.isBuffered()) queueEntry.song.buffer();
                      if (queueEntry !== null) /* setTimeout(function() { */_player.playSong(queueEntry.song); // }, 0);
                    });
                  } else {
@@ -154,7 +54,7 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
              },
              pause: function () {
                $log.info('angular-player: Pause track '+this.getCurrentTrack().id);
-               soundManager.pause(this.getCurrentTrack().id);
+               this.getCurrentSong().pause();
 
                //set as not playing
                isPlaying = false;
@@ -162,17 +62,10 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
              },
              stop: function () {
                $log.info('angular-player: Stop track '+this.getCurrentTrack().id);
-               //first pause it
                this.pause();
-
                this.resetProgress();
-               soundManager.setPosition(this.getCurrentTrack().id, 0);
-               // $rootScope.$broadcast('track:progress', trackProgress);
-               //$rootScope.$broadcast('currentTrack:position', 0);
-               //$rootScope.$broadcast('currentTrack:duration', 0);
-
-               soundManager.stopAll();
-               // soundManager.unload(this.getCurrentTrack().id);
+               this.getCurrentSong().seek(0);
+               this.getCurrentSong().stop();
              },
 
              togglePlay : function() {
@@ -190,7 +83,7 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                  $log.info('angular-player: Next track: ...still not in queue, queueing');
                  this.pushNextSongToQueue(function(nextTrack) {
                    var queueEntry = _player.queue.dequeue();
-                   queueEntry.buffer();
+                   queueEntry.song.buffer();
                    if (queueEntry !== null) _player.playSong(queueEntry.song);
                  });
                } else {
@@ -198,27 +91,17 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                  var queueEntry = _player.queue.dequeue();
                  if (queueEntry !== null) _player.playSong(queueEntry.song);
                }
-               // Queue empty? Add new song then:
-               // DK: TEMP Queue only when old song is fully loaded.
-               // if (!this.queue.hasNext()) {
-               //   $log.info('angular-player: Next track: ...pushing new song to queue too!');
-               //   this.pushNextSongToQueue( function(song) {
-               //     _queue.bufferNext();
-               //   });
-               // } else {
-               //   _queue.bufferNext();
-               // }
              },
              prevTrack: function () {
-               $log.warn('angular-player: Previous Track, need reimplementation!!!');
+               var currentSong = this.getCurrentSong();
+               if (!_.isUndefined(currentSong)) {
+                 // Add to queue (in first pos) so it will be next after backed song:
+                 this.queue.enqueueNext(currentSong);
+               }
+               this.playSong(this.tracksHistory.restoreLastSong(), false);
              },
              mute: function () {
-               if (soundManager.muted === true) {
-                 soundManager.unmute()
-               } else {
-                 soundManager.mute();
-               }
-
+               this.getCurrentSong().mute();
                $rootScope.$broadcast('music:mute', soundManager.muted);
              },
              getMuteStatus: function () {
@@ -227,59 +110,15 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
              getVolume: function () {
                return volume;
              },
-             adjustVolume: function (increase) {
-               var changeVolume = function (volume) {
-                 for (var i = 0; i < soundManager.soundIDs.length; i++) {
-                   var mySound = soundManager.getSoundById(soundManager.soundIDs[i]);
-                   mySound.setVolume(volume);
-                 }
-
-                 $rootScope.$broadcast('music:volume', volume);
-               };
-
-               if (increase === true) {
-                 if (volume < 100) {
-                   volume = volume + 10;
-                   changeVolume(volume);
-                 }
-               } else {
-                 if (volume > 0) {
-                   volume = volume - 10;
-                   changeVolume(volume);
-                 }
-               }
+             adjustVolume: function (vol) {
+               this.getCurrentSong().setVolume(vol);
              },
              resetProgress: function () {
                trackProgress = 0;
-             }
-
+             },
            };
-           angularPlayerInstance.init = function () {
-
-                function updateSongBytesLoaded(song) {
-                  //soundManager._writeDebug('sound '+this.id+' loading, '+this.bytesLoaded+' of '+this.bytesTotal);
-                  //broadcast track download progress:
-                  if (!_.isUndefined(currentTrack) && song.id === currentTrack.id)
-                    if (!$rootScope.$$phase) {
-                      $rootScope.$broadcast('currentTrack:bytesLoaded',
-                                            {loaded: song.bytesLoaded, total: song.bytesTotal});
-                    }
-
-                  if (!_.isUndefined(song.bytesLoaded) && ((song.bytesLoaded / song.bytesTotal ) >= 0.5 )) {
-
-                    if (bufferingNextSongAlreadyCalled == false) {
-                      $log.info('angular-player: loaded 99% of song, going to push new song in queue!');
-                      bufferingNextSongAlreadyCalled = true;
-                      if (!_queue.hasNext()) {
-                        angularPlayerInstance.pushNextSongToQueue(function (song) {
-                          _queue.bufferNext();
-                        });
-                      } else {
-                        _queue.bufferNext();
-                      }
-                    }
-                 }
-                }
+           angularPlayerInstance.init = function (basePlayerEngine) {
+                var mbPlayerEngine = basePlayerEngine;
                 if (typeof soundManager === 'undefined') {
                     alert('Please include SoundManager2 Library!');
                 }
@@ -288,7 +127,7 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                     //url: '/path/to/swfs/',
                     //flashVersion: 9,
                     preferFlash: false, // prefer 100% HTML5 mode, where both supported
-                    debugMode: true, // enable debugging output (console.log() with HTML fallback)
+                    debugMode: false, // enable debugging output (console.log() with HTML fallback)
                     useHTML5Audio: true,
                     currentTrack : null,
                     onready: function () {
@@ -306,21 +145,24 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                         loops: 1, // number of times to play the sound. Related: looping (API demo)
                         multiShot: false, // let sounds "restart" or "chorus" when played multiple times..
                         multiShotEvents: false, // allow events (onfinish()) to fire for each shot, if supported.
-                        onid3: null, // callback function for "ID3 data is added/available"
-                        onload: null, // callback function for "load finished"
-                        onstop: null, // callback for "user stop"
-                        onpause: null, // callback for "pause"
+                        onid3: undefined, // callback function for "ID3 data is added/available"
+                        onload: undefined, // callback function for "load finished"
+                        onstop: undefined, // callback for "user stop"
+                        onpause: undefined, // callback for "pause"
+                        onerror: function(err) {
+                          $log.error("Error happened: "+err);
+                        },
                         onplay: function() {
                           // BUGFIX: Some songs could be fully buffered b4 start of playing, so whileloading
                           // won't fire with them, in that case, we UP this value from here:
-                          updateSongBytesLoaded(this);
+                          mbPlayerEngine.events.onplay(this.id);
                         }, // callback for "play" start
                         ontimeout : function(status) {
                           console.log("SM2 Timeout event: ");
                           console.log(status);
                         },
-                        onresume: null, // callback for "resume" (pause toggle)
-                        position: null, // offset (milliseconds) to seek to within downloaded sound.
+                        onresume: undefined, // callback for "resume" (pause toggle)
+                        position: undefined, // offset (milliseconds) to seek to within downloaded sound.
                         pan: 0, // "pan" settings, left-to-right, -100 to 100
                         stream: true, // allows playing before entire file has loaded (recommended)
                         to: null, // position to end playback within a sound (msec), see demo
@@ -331,41 +173,17 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                             //soundManager._writeDebug('sound '+this.id+' loading, '+this.bytesLoaded+' of '+this.bytesTotal);
                           //broadcast track download progress:
                           // $log.info('angular-player: whileloading event: ' + this.bytesLoaded + " / " + this.bytesTotal);
-                          updateSongBytesLoaded(this);
+                          mbPlayerEngine.events.whileloading(this.id);
                         },
                         whileplaying: function () {
                           // $log.info('angular-player: whileplaying event: ' + this.position + " / " + this.duration);
 
                             //broadcast current playing track progress
-                            trackProgress = ((this.position / this.duration) * 100);
-                            $rootScope.$broadcast('track:progress', trackProgress);
+                          mbPlayerEngine.events.whileplaying(this.id);
 
-                            //broadcast track position
-                            $rootScope.$broadcast('currentTrack:position', this.position);
-
-                            //broadcast track duration
-                            $rootScope.$broadcast('currentTrack:duration', this.duration);
                         },
                         onfinish: function () {
-                          /*
-                          * Chained playback (sequential / playlist-style behaviour) works when using the onfinish
-                          * event handler. Otherwise, blocking occurs.
-                          * */
-                          $log.info('angular-player: onfinish event on currentTrack: ' + currentTrack.id);
-                               // if (autoPlay === true) {
-                                //play next track if autoplay is on
-                                //get your angular element
-                          // angularPlayerInstance.playSong(currentTrack);
-                          angularPlayerInstance.nextTrack();
-
-                          /*
-                          angularPlayerInstance.stop();
-                          var queueEntry = angularPlayerInstance.queue.dequeue();
-                          queueEntry.buffer();
-                          if (queueEntry !== null) soundManager.play(queueEntry.song.shared.id);
-                          $log.info('angular-player: onfinish, playing next:  ' + queueEntry.song.shared.id);
-                          */
-                                $rootScope.$broadcast('track:id', currentTrack);
+                          mbPlayerEngine.events.onfinish();
                             // }
                         }
                     }
@@ -380,4 +198,4 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
             }
 
            return angularPlayerInstance;
-    }])
+    })
