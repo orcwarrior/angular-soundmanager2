@@ -1,19 +1,6 @@
 angular.module('angularSoundManager', ['musicBucketEngine'])
 
-    .filter('humanTime', function () {
-        return function (input) {
-            function pad(d) {
-                return (d < 10) ? '0' + d.toString() : d.toString();
-            }
-
-            var min = (input / 1000 / 60) << 0,
-                sec = Math.round((input / 1000) % 60);
-
-            return pad(min) + ':' + pad(sec);
-        };
-    })
-
-    .factory('angularPlayer', function ($rootScope, $log, playlist) {
+    .factory('angularPlayer', function ($rootScope, $log, playlist, playbackError, playbackErrorTypes) {
 
 
         var isPlaying = false,
@@ -129,7 +116,9 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                     preferFlash: false, // prefer 100% HTML5 mode, where both supported
                     debugMode: false, // enable debugging output (console.log() with HTML fallback)
                     useHTML5Audio: true,
-                    currentTrack : null,
+                    // currentTrack : null,
+                    // ignoreMobileRestrictions: false,  // if true, SM2 will not apply global HTML5 audio rules to mobile UAs. iOS > 7 and WebViews may allow multiple Audio() instances.
+                    html5Test: /^(probably|maybe)$/i, // HTML5 Audio() format support test. Use /^probably$/i; if you want to be more conservative.
                     onready: function () {
                         //console.log('sound manager ready!');
                     },
@@ -139,7 +128,7 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                     },
                     defaultOptions: {
                         // set global default volume for all sound objects
-                        autoLoad: true, // enable automatic loading (otherwise .load() will call with .play())
+                        autoLoad: false, // enable automatic loading (otherwise .load() will call with .play())
                         autoPlay: false, // enable playing of file ASAP (much faster if "stream" is true)
                         from: null, // position to start playback within a sound (msec), see demo
                         loops: 1, // number of times to play the sound. Related: looping (API demo)
@@ -149,8 +138,11 @@ angular.module('angularSoundManager', ['musicBucketEngine'])
                         onload: undefined, // callback function for "load finished"
                         onstop: undefined, // callback for "user stop"
                         onpause: undefined, // callback for "pause"
+                        /* new here */
                         onerror: function(err) {
-                          $log.error("Error happened: "+err);
+                          $log.error("Error happened: ");
+                          $log.error(err);
+                          mbPlayerEngine.events.onerror(new playbackError(playbackErrorTypes.sm2, this.id, err ));
                         },
                         onplay: function() {
                           // BUGFIX: Some songs could be fully buffered b4 start of playing, so whileloading
